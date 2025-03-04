@@ -14,7 +14,6 @@ pip install -e .
 import os
 from PathRAG import PathRAG, QueryParam
 from PathRAG.llm import gpt_4o_mini_complete
-import os
 
 WORKING_DIR = "./your_working_dir"
 api_key="your_api_key"
