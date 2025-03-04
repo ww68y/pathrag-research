@@ -1,15 +1,6 @@
 import os
 from PathRAG import PathRAG, QueryParam
 from PathRAG.llm import gpt_4o_mini_complete
-import time
-import openai
-import json
-import os
-import re
-from openai import OpenAI
-import sys
-import re
-from collections import defaultdict
 
 WORKING_DIR = ""
 
