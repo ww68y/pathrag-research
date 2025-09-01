@@ -312,6 +312,7 @@ async def extract_entities(
         ).format(**context_base, input_text=content)
 
         final_result = await use_llm_func(hint_prompt)
+        # print(final_result)#修改
         history = pack_user_ass_to_openai_messages(hint_prompt, final_result)
         for now_glean_index in range(entity_extract_max_gleaning):
             glean_result = await use_llm_func(continue_prompt, history_messages=history)
@@ -487,7 +488,7 @@ async def kg_query(
         "language", PROMPTS["DEFAULT_LANGUAGE"]
     )
 
-    if query_param.mode not in ["hybrid"]:
+    if query_param.mode not in ["hybrid", "local"]:
         logger.error(f"Unknown mode {query_param.mode} in kg_query")
         return PROMPTS["fail_response"]
 
@@ -496,12 +497,15 @@ async def kg_query(
     kw_prompt = kw_prompt_temp.format(query=query, examples=examples, language=language)
     result = await use_model_func(kw_prompt, keyword_extraction=True)
     logger.info("kw_prompt result:")
-    print(result)
+    # print("result",result)
     try:
-
+       
         match = re.search(r"\{.*\}", result, re.DOTALL)
+        # print("match", match)
         if match:
             result = match.group(0)
+            if result.startswith("{{") and result.endswith("}}"):
+                result = result[1:-1]
             keywords_data = json.loads(result)
 
             hl_keywords = keywords_data.get("high_level_keywords", [])
@@ -585,6 +589,106 @@ async def kg_query(
     return response
 
 
+# async def _build_query_context(
+#     query: list,
+#     knowledge_graph_inst: BaseGraphStorage,
+#     entities_vdb: BaseVectorStorage,
+#     relationships_vdb: BaseVectorStorage,
+#     text_chunks_db: BaseKVStorage[TextChunkSchema],
+#     query_param: QueryParam,
+# ):
+#     ll_entities_context, ll_relations_context, ll_text_units_context = "", "", ""
+#     hl_entities_context, hl_relations_context, hl_text_units_context = "", "", ""
+
+#     ll_kewwords, hl_keywrds = query[0], query[1]
+#     if query_param.mode in ["local", "hybrid"]:
+#         if ll_kewwords == "":
+#             ll_entities_context, ll_relations_context, ll_text_units_context = (
+#                 "",
+#                 "",
+#                 "",
+#             )
+#             warnings.warn(
+#                 "Low Level context is None. Return empty Low entity/relationship/source"
+#             )
+#             query_param.mode = "global"
+#         else:
+#             (
+#                 ll_entities_context,
+#                 ll_relations_context,
+#                 ll_text_units_context,
+#             ) = await _get_node_data(
+#                 ll_kewwords,
+#                 knowledge_graph_inst,
+#                 entities_vdb,
+#                 text_chunks_db,
+#                 query_param,
+#             )
+#     if query_param.mode in ["hybrid"]:
+#         if hl_keywrds == "":
+#             hl_entities_context, hl_relations_context, hl_text_units_context = (
+#                 "",
+#                 "",
+#                 "",
+#             )
+#             warnings.warn(
+#                 "High Level context is None. Return empty High entity/relationship/source"
+#             )
+#             query_param.mode = "local"
+#         else:
+#             (
+#                 hl_entities_context,
+#                 hl_relations_context,
+#                 hl_text_units_context,
+#             ) = await _get_edge_data(
+#                 hl_keywrds,
+#                 knowledge_graph_inst,
+#                 relationships_vdb,
+#                 text_chunks_db,
+#                 query_param,
+#             )
+#             if (
+#                 hl_entities_context == ""
+#                 and hl_relations_context == ""
+#                 and hl_text_units_context == ""
+#             ):
+#                 logger.warn("No high level context found. Switching to local mode.")
+#                 query_param.mode = "local"
+#     if query_param.mode == "hybrid":
+#         entities_context, relations_context, text_units_context = combine_contexts(
+#             [hl_entities_context, hl_relations_context],
+#             [ll_entities_context, ll_relations_context],
+#             [hl_text_units_context, ll_text_units_context],
+#         )
+
+
+#     return f"""
+# -----global-information-----
+# -----high-level entity information-----
+# ```csv
+# {hl_entities_context}
+# ```
+# -----high-level relationship information-----
+# ```csv
+# {hl_relations_context}
+# ```
+# -----Sources-----
+# ```csv
+# {text_units_context}
+# ```
+# -----local-information-----
+# -----low-level entity information-----
+# ```csv
+# {ll_entities_context}
+# ```
+# -----low-level relationship information-----
+# ```csv
+# {ll_relations_context}
+# ```
+# """
+
+
+
 async def _build_query_context(
     query: list,
     knowledge_graph_inst: BaseGraphStorage,
@@ -597,68 +701,65 @@ async def _build_query_context(
     hl_entities_context, hl_relations_context, hl_text_units_context = "", "", ""
 
     ll_kewwords, hl_keywrds = query[0], query[1]
-    if query_param.mode in ["local", "hybrid"]:
-        if ll_kewwords == "":
-            ll_entities_context, ll_relations_context, ll_text_units_context = (
-                "",
-                "",
-                "",
-            )
+    mode = query_param.mode
+    if mode in ["hybrid","local","global"]:
+        if ll_kewwords == "" and hl_keywrds == "":
             warnings.warn(
-                "Low Level context is None. Return empty Low entity/relationship/source"
+                "Low and Global Level context is None. Return empty Low and Global entity/relationship/source"
             )
-            query_param.mode = "global"
         else:
-            (
-                ll_entities_context,
-                ll_relations_context,
-                ll_text_units_context,
-            ) = await _get_node_data(
-                ll_kewwords,
-                knowledge_graph_inst,
-                entities_vdb,
-                text_chunks_db,
-                query_param,
-            )
-    if query_param.mode in ["hybrid"]:
-        if hl_keywrds == "":
-            hl_entities_context, hl_relations_context, hl_text_units_context = (
-                "",
-                "",
-                "",
-            )
-            warnings.warn(
-                "High Level context is None. Return empty High entity/relationship/source"
-            )
-            query_param.mode = "local"
-        else:
-            (
-                hl_entities_context,
-                hl_relations_context,
-                hl_text_units_context,
-            ) = await _get_edge_data(
-                hl_keywrds,
-                knowledge_graph_inst,
-                relationships_vdb,
-                text_chunks_db,
-                query_param,
-            )
-            if (
-                hl_entities_context == ""
-                and hl_relations_context == ""
-                and hl_text_units_context == ""
-            ):
-                logger.warn("No high level context found. Switching to local mode.")
-                query_param.mode = "local"
-    if query_param.mode == "hybrid":
+            if ll_kewwords == "":
+                ll_entities_context, ll_relations_context, ll_text_units_context = (
+                    "",
+                    "",
+                    "",
+                )
+                warnings.warn(
+                    "Low Level context is None. Return empty Low entity/relationship/source"
+                )
+                mode = "global"
+            else:
+                (
+                    ll_entities_context,
+                    ll_relations_context,
+                    ll_text_units_context,
+                ) = await _get_node_data(
+                    ll_kewwords,
+                    knowledge_graph_inst,
+                    entities_vdb,
+                    text_chunks_db,
+                    query_param,
+                )
+            if hl_keywrds == "":
+                hl_entities_context, hl_relations_context, hl_text_units_context = (
+                    "",
+                    "",
+                    "",
+                )
+                warnings.warn(
+                    "High Level context is None. Return empty High entity/relationship/source"
+                )
+                mode = "local"
+            else:
+                (
+                    hl_entities_context,
+                    hl_relations_context,
+                    hl_text_units_context,
+                ) = await _get_edge_data(
+                    hl_keywrds,
+                    knowledge_graph_inst,
+                    relationships_vdb,
+                    text_chunks_db,
+                    query_param,
+                )
+
+    if mode == "hybrid":
         entities_context, relations_context, text_units_context = combine_contexts(
             [hl_entities_context, hl_relations_context],
             [ll_entities_context, ll_relations_context],
             [hl_text_units_context, ll_text_units_context],
         )
-
-
-    return f"""
+        context=f"""
 -----global-information-----
 -----high-level entity information-----
 ```csv
@@ -682,6 +783,41 @@ async def _build_query_context(
 {ll_relations_context}
 ```
 """
+    if mode == "local":
+        context=f"""
+-----local-information-----
+-----low-level entity information-----
+```csv
+{ll_entities_context}
+```
+-----Sources-----
+```csv
+{ll_text_units_context}
+```
+-----low-level relationship information-----
+```csv
+{ll_relations_context}
+```
+"""
+    if mode == "global":
+        context=f"""
+-----global-information-----
+-----high-level entity information-----
+```csv
+{hl_entities_context}
+```
+-----Sources-----
+```csv
+{hl_text_units_context}
+```
+-----low-level relationship information-----
+```csv
+{hl_relations_context}
+```
+"""
+
+    # print(context)
+    return context
 
 async def _get_node_data(
     query,
@@ -1181,11 +1317,11 @@ async def _find_most_related_edges_from_entities3(
             if edge0==None or edge1==None or edge2==None:
                 print(path,"边丢失")
                 if edge0==None:
-                    print("edge0丢失")
+                    # print("edge0丢失")
                 if edge1==None:
-                    print("edge1丢失")
+                    # print("edge1丢失")
                 if edge2==None:
-                    print("edge2丢失")
+                    # print("edge2丢失")
                 continue
             e1 = "through edge ("+edge0["keywords"]+") to connect to "+s_name+" and "+b1_name+"."
             e2 = "through edge ("+edge1["keywords"]+") to connect to "+b1_name+" and "+b2_name+"."
