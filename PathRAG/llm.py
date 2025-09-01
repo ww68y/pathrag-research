@@ -309,7 +309,7 @@ async def hf_model_if_cache(
 
     input_ids = hf_tokenizer(
         input_prompt, return_tensors="pt", padding=True, truncation=True
-    )#修改.to("cuda")
+    ).to("cuda")
     inputs = {k: v.to(hf_model.device) for k, v in input_ids.items()}
     output = hf_model.generate(
         **input_ids, max_new_tokens=512, num_return_sequences=1
