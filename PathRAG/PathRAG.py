@@ -499,7 +499,7 @@ class PathRAG:
         return loop.run_until_complete(self.aquery(query, param))
     
     async def aquery(self, query: str, param: QueryParam = QueryParam()):
-        if param.mode in ["hybrid"]:
+        if param.mode in ["hybrid", "local"]:
             response= await kg_query(
                 query,
                 self.chunk_entity_relation_graph,

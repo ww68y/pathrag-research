@@ -25,4 +25,6 @@ tenacity
 tiktoken
 torch
 transformers
+modelscope
+vllm
 xxhash
