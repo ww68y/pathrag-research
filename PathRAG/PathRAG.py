@@ -8,7 +8,7 @@ from typing import Type, cast
 
 
 from .llm import (
-    gpt_4o_mini_complete,
+    openai_complete,
     openai_embedding,
 )
 from .operate import (
@@ -150,8 +150,8 @@ class PathRAG:
     embedding_func_max_async: int = 16
 
 
-    llm_model_func: callable = gpt_4o_mini_complete  
-    llm_model_name: str = "meta-llama/Llama-3.2-1B-Instruct"  
+    llm_model_func: callable = openai_complete  
+    llm_model_name: str = "gpt-4o"  
     llm_model_max_token_size: int = 32768
     llm_model_max_async: int = 16
     llm_model_kwargs: dict = field(default_factory=dict)
@@ -270,10 +270,10 @@ class PathRAG:
 
         }
 
-    def insert(self, string_or_strings):
+    async def insert(self, string_or_strings):
         
         loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.ainsert(string_or_strings))
+        return await loop.run_until_complete(await self.ainsert(string_or_strings))
 
     async def ainsert(self, string_or_strings):
         update_storage = False
@@ -494,12 +494,12 @@ class PathRAG:
             if update_storage:
                 await self._insert_done()
     
-    def query(self, query: str, param: QueryParam = QueryParam()):
+    async def query(self, query: str, param: QueryParam = QueryParam()):
         loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.aquery(query, param))
+        return await loop.run_until_complete(await self.aquery(query, param))
     
     async def aquery(self, query: str, param: QueryParam = QueryParam()):
-        if param.mode in ["hybrid", "local"]:
+        if param.mode in ["hybrid"]:
             response= await kg_query(
                 query,
                 self.chunk_entity_relation_graph,
