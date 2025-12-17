@@ -131,8 +131,163 @@ main.py - Main application entry point
 - npm or yarn
 
 ### Quick Start (Recommended)
+#### Command Line (Without GUI)
+Python Version: Python 3.10.18
+```bash
+cd PathRAG
+pip install -e .
+```
+- use OpenAI API key
+- You can quickly experience this project in the `v1_test.py` file.
+- Set OpenAI API key in environment if using OpenAI models: `api_key="sk-...".` in the `v1_test.py` and `llm.py` file
+- Prepare your retrieval document "text.txt".
+-  Use the following Python snippet in the `v1_test.py` file to initialize PathRAG and perform queries.
+  
+```python
+import os
+from PathRAG import PathRAG, QueryParam
+from PathRAG.llm import gpt_4o_mini_complete
 
-#### Starting the API
+WORKING_DIR = "./your_working_dir"
+api_key="your_api_key"
+os.environ["OPENAI_API_KEY"] = api_key
+base_url="https://api.openai.com/v1"
+os.environ["OPENAI_API_BASE"]=base_url
+
+
+if not os.path.exists(WORKING_DIR):
+    os.mkdir(WORKING_DIR)
+
+rag = PathRAG(
+    working_dir=WORKING_DIR,
+    llm_model_func=gpt_4o_mini_complete,  
+)
+
+data_file="./text.txt"
+question="your_question"
+with open(data_file) as f:
+    rag.insert(f.read())
+
+print(rag.query(question, param=QueryParam(mode="hybrid")))
+```
+##### Quick Start with models from different sources
+- You can use the model from huggingface, ollama, modelscope, local and vllm
+- You can quickly experience this project in the `rag_test.py` file
+- Select your model source—— hf / vllm / ollama / ms / local
+- Prepare your llm_model，embedding_model and  retrieval document "your data file" . 
+- Use the following Python snippet in the `rag_test.py` file to use models from different sources
+
+```Python
+import os
+import asyncio
+import torch
+from PathRAG.RAGRunner import RAGRunner
+if __name__ == "__main__":
+	backend = "your_model_source" # hf / vllm / ollama / ms / local
+	working_dir = f"your_working_dir" 
+	llm_model_name = "Qwen/Qwen3-0.6B" # model name or path of model
+	embedding_model_name = "iic/nlp_corom_sentence-embedding_english-base" # embedding model name or path ofembedding model
+	# ollama additional parameters
+	llm_model_kwargs = {
+	"host": "http://localhost:11434",
+	"options": {"num_ctx": 8192},
+	"timeout": 300,
+	} if backend == "ollama" else {}
+	
+	runner = RAGRunner(
+		backend=backend,
+		working_dir=working_dir,
+		llm_model_name=llm_model_name,
+		embedding_model_name=embedding_model_name,
+		llm_model_max_token_size=8192,
+		llm_model_kwargs=llm_model_kwargs,
+		embedding_dim=768,
+		embedding_max_token_size=5000,
+	)
+	data_file = "your_data_file"
+	question = "your_question"
+	with open(data_file, "r", encoding="utf-8") as f:
+		runner.insert_text(f.read())
+	answer = runner.query(question, mode="hybrid")
+	print("question:", question)
+	print("answer:", answer)
+```
+
+##### Parameter modification
+You can adjust the relevant parameters in the `base.py` and `operate.py` files.
+- You can change the hyperparameter `top_k` in `base.py`, where `top_k` represents the number of nodes retrieved
+- You can change the hyperparameters `alpha` and `threshold` in `operate.py`, where `alpha` represents the decay rate of information propagation along the edges, and `threshold` is the pruning threshold.
+##### Batch Insert
+```python
+import os
+folder_path = "your_folder_path"  
+
+txt_files = [f for f in os.listdir(folder_path) if f.endswith(".txt")]
+for file_name in txt_files:
+    file_path = os.path.join(folder_path, file_name)
+    with open(file_path, "r", encoding="utf-8") as file:
+        rag.insert(file.read())
+```
+
+#### Evaluation
+
+##### Dataset
+The dataset used in PathRAG can be downloaded from [TommyChien/UltraDomain](https://huggingface.co/datasets/TommyChien/UltraDomain).
+##### Eval Metrics
+<details>
+<summary> Prompt </summary>
+  
+```python
+You will evaluate two answers to the same question based on five criteria: **Comprehensiveness**, **Diversity**, **logicality**, **Coherence**, **Relevance**.
+
+- **Comprehensiveness**: How much detail does the answer provide to cover all aspects and details of the question?
+- **Diversity**: How varied and rich is the answer in providing different perspectives and insights on the question?
+- **logicality**: How logically does the answer respond to all parts of the question?
+- **Coherence**: How well does the answer maintain internal logical connections between its parts, ensuring a smooth and consistent structure?
+- **Relevance**: How relevant is the answer to the question, staying focused and addressing the intended topic or issue?
+
+For each criterion, choose the better answer (either Answer 1 or Answer 2) and explain why.
+
+Here is the question:
+{query}
+
+Here are the two answers:
+**Answer 1:**
+{answer1}
+
+**Answer 2:**
+{answer2}
+
+Evaluate both answers using the five criteria listed above and provide detailed explanations for each criterion.
+
+Output your evaluation in the following JSON format:
+{{
+  "Comprehensiveness": {{
+    "Winner": "[Answer 1 or Answer 2]",
+    "Explanation": "[Provide explanation here]"
+  }},
+  "Diversity": {{
+    "Winner": "[Answer 1 or Answer 2]",
+    "Explanation": "[Provide explanation here]"
+  }},
+  "logicality": {{
+    "Winner": "[Answer 1 or Answer 2]",
+    "Explanation": "[Provide explanation here]"
+  }},
+  "Coherence": {{
+    "Winner": "[Answer 1 or Answer 2]",
+    "Explanation": "[Provide explanation here]"
+  }},
+  "Relevance": {{
+    "Winner": "[Answer 1 or Answer 2]",
+    "Explanation": "[Provide explanation here]"
+  }}
+}}
+```
+</details>
+
+#### With GUI
+##### Starting the API
 
 Use our start script to set up and run the API:
 
@@ -160,7 +315,7 @@ The API will be available at:
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
 
-#### Starting the UI
+##### Starting the UI
 
 Navigate to the UI directory and start the React application:
 
