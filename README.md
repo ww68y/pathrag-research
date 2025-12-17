@@ -592,7 +592,7 @@ PathRAG is particularly effective for:
 ## Authors & Contributors
 
 ### PathRAG Core Logic Research Team
-- Boyu Chen¹, Zirui Guo¹,², Zidan Yang¹,³, Yuluo Chen¹, Junze Chen¹, Zhenghao Liu³, Chuan Shi¹, Cheng Yang¹
+- Boyu Chen¹, Zirui Guo² Zidan Yang¹, Yuluo Chen¹, Junze Chen¹, Zhenghao Liu³, Chuan Shi¹, Cheng Yang¹
   1. Beijing University of Posts and Telecommunications
   2. University of Hong Kong
   3. Northeastern University
