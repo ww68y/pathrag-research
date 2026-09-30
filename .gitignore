@@ -76,6 +76,31 @@ docs/_build/
 node_modules/
 data/
 uploads/
+logs/
+edge_cache/
+review_render/
+pathrag.db
+*.db
+*.sqlite
+*.sqlite3
+datasets/
+data_baselines/
+data_repro/
+data_smoke/
+ui/node_modules/
+ui/build/
+原版本论文.pdf
+experiments/_artifacts/
+research_archive/
+paper/build/
+paper/patent_materials/
+
+# Keep the concise experiment index and paper-ready summaries, but ignore
+# generated raw experiment outputs and caches.
+results/*
+!results/README.md
+!results/paper_tables/
+!results/paper_tables/**
 # PyBuilder
 .pybuilder/
 target/

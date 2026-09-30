@@ -9,12 +9,13 @@ import {
 
 // Search modes for dropdown
 const searchModeOptions = [
+  { label: 'Agent', value: 'agent' },
   { label: 'Local', value: 'local' },
   { label: 'Hybrid', value: 'hybrid' },
   { label: 'Global', value: 'global' }
 ];
 
-const ChatInput = ({ onSendMessage, isLoading, searchContext, setSearchContext }) => {
+const ChatInput = ({ onSendMessage, onChange, isLoading, searchContext, setSearchContext, placeholder }) => {
   const [message, setMessage] = useState('');
 
   // Handle file attachment
@@ -78,9 +79,14 @@ const ChatInput = ({ onSendMessage, isLoading, searchContext, setSearchContext }
             <Input
               as="textarea"
               rows={1}
-              placeholder="How can I help you?"
+              placeholder={placeholder || "How can I help you?"}
               value={message}
-              onChange={setMessage}
+              onChange={(value) => {
+                setMessage(value);
+                if (onChange) {
+                  onChange(value);
+                }
+              }}
               onKeyDown={handleKeyPress}
               disabled={isLoading}
               className="chat-text-input"

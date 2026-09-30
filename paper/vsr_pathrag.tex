@@ -1,0 +1,416 @@
+% VSR-PathRAG: A Verification--Scoring--Repair Framework for Trustworthy Graph-Based RAG
+% Target: IEEE TKDE / Information Processing & Management
+%
+% Compile with: pdflatex vsr_pathrag.tex
+%
+\documentclass[journal,onecolumn,11pt]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{cite}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{VSR-PathRAG: A Verification--Scoring--Repair Framework for Trustworthy Graph-Based Retrieval-Augmented Generation}
+
+\author{
+  Author Name \\
+  \textit{Affiliation} \\
+  \texttt{email@example.com}
+}
+
+\maketitle
+
+\begin{abstract}
+Retrieval-Augmented Generation (RAG) systems that ground large language model (LLM) outputs in external knowledge suffer from two fundamental trust deficits: (1) \textit{evidence insufficiency}---the retrieved evidence may not logically entail the generated answer, and (2) \textit{claim hallucination}---unsupported or contradicted claims can survive into the final output. Existing GraphRAG approaches retrieve relevant subgraphs but lack a unified runtime contract for deciding whether the evidence is sufficient for the answer's obligations and claims. We propose \textbf{VSR-PathRAG}, an evidence-contract-guided Verification--Scoring--Repair framework. The contract makes question obligations, claim support, evidence necessity, and submission risk explicit; MPS, CPN, and RCS are its selection, intervention, and decision primitives rather than three unrelated contributions. On UltraDomain Mix130, strict ablation over seven configurations shows that the rescue-enhanced VSR layer improves F1 from 0.2206 without repair to 0.2878 while reducing abstention. Under the frozen SAGE v33-preservation instantiation, locked unseen75 plus Repeat1--8 provide 326 zero-overlap holdout examples with complete lexical, same-rubric judge, and pairwise evaluation: SAGE v33 reaches weighted F1 0.3164 versus 0.2972 for both Naive RAG and HyDE, judge overall 3.555 versus 2.960/2.942, and average pairwise target win rates of 59.66\% versus HyDE and 61.50\% versus Naive. A focused mechanism audit further shows that the current contract-gap score identifies harder rows but is not yet an estimate of escalation benefit, making selective upgrade prediction the central next step.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Retrieval-Augmented Generation, Knowledge Graph, Evidence Verification, Counterfactual Reasoning, Risk Calibration, PAC-Bayesian Bounds
+\end{IEEEkeywords}
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Introduction}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Motivation}
+
+Large Language Models (LLMs) generate fluent but potentially ungrounded text. Retrieval-Augmented Generation (RAG) mitigates hallucination by conditioning generation on externally retrieved evidence. However, three critical gaps remain:
+
+\textbf{(1) No proof structure.} Standard RAG retrieves top-$k$ passages and concatenates them into the prompt. There is no formal notion of whether the retrieved set \textit{proves} the answer's claims. This is analogous to presenting evidence without making a legal case.
+
+\textbf{(2) No necessity analysis.} Even when evidence supports the answer, some evidence paths may be \textit{replaceable}---removing them does not affect the answer's correctness. Without identifying \textit{necessary} evidence, the system cannot detect fragile proofs or prioritize retrieval budget.
+
+\textbf{(3) No risk gating.} RAG systems submit answers regardless of evidence quality. When the evidence is insufficient or contradictory, the system should \textit{abstain} or \textit{repair} rather than fabricate.
+
+\subsection{Contributions}
+
+We propose VSR-PathRAG, which addresses these gaps through one evidence-contract problem:
+
+\begin{enumerate}
+\item \textbf{Evidence Contract}: We represent a question as obligations and an answer as atomic claims, then compute a contract state describing coverage, support, contradiction, and answer-shape deficits.
+
+\item \textbf{Deficit-Guided Escalation}: MPS and CPN provide the evidence-selection and necessity primitives used to decide whether verification or rescue is worth the additional cost.
+
+\item \textbf{Controlled Repair and Submission}: RCS provides the final decision layer, while deterministic preservation guards prevent a repair from being accepted when it loses supported content without compensating evidence.
+
+\item \textbf{Mechanism-Focused Evaluation}: We report a complete UltraDomain Mix130 ablation, external retrieval-baseline comparisons, representative graph-RAG supplements, locked zero-overlap holdouts with 326/326 complete rows, and an explicit audit of whether contract deficit predicts escalation benefit.
+\end{enumerate}
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Problem Formulation}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Notation}
+
+Let $q$ denote a user question, $\mathcal{G} = (V, E)$ a knowledge graph, $\mathcal{E} = \{e_1, \ldots, e_N\}$ the retrieved evidence set, $\mathcal{O} = \{o_1, \ldots, o_P\}$ the question obligations (required answer facets), $\mathcal{C} = \{c_1, \ldots, c_M\}$ the atomic claims extracted from the generated answer, and $\Phi: \mathcal{E} \times \mathcal{C} \to \{+1, -1, 0\}$ the signed claim-evidence graph.
+
+\subsection{Formal Definitions}
+
+\begin{definition}[Answer Trustworthiness]
+An answer $a$ with claims $\mathcal{C}$ is \textit{trustworthy} with respect to evidence $\mathcal{E}$ if:
+\begin{equation}
+\forall c_i \in \mathcal{C}: \exists e_j \in \mathcal{E} \text{ s.t. } \Phi(e_j, c_i) = +1 \text{ and } \nexists e_k \in \mathcal{E} \text{ s.t. } \Phi(e_k, c_i) = -1.
+\end{equation}
+\end{definition}
+
+\begin{definition}[Proof Subgraph]
+A subset $S \subseteq \mathcal{E}$ is a \textit{proof subgraph} for answer $a$ if:
+\begin{equation}
+\operatorname{cov}_{\mathcal{O}}(S) \geq \tau_O \quad \text{and} \quad \operatorname{cov}_{\mathcal{C}}(S) \geq \tau_C,
+\end{equation}
+where $\tau_O, \tau_C$ are coverage thresholds. $S$ is \textit{minimal} if no proper subset $S' \subsetneq S$ satisfies both constraints.
+\end{definition}
+
+\begin{definition}[Counterfactual Necessity]
+Evidence $e_j \in S$ is \textit{necessary} if removing it causes either $\operatorname{cov}_{\mathcal{C}}(S \setminus \{e_j\}) < \tau_C$ or $\operatorname{cov}_{\mathcal{O}}(S \setminus \{e_j\}) < \tau_O$.
+\end{definition}
+
+\begin{definition}[Calibrated Risk]
+\label{def:risk}
+The calibrated risk of submitting answer $a$ is:
+\begin{equation}
+R(a, S) = \sum_{i=1}^{5} w_i \cdot r_i, \quad \sum_{i=1}^{5} w_i = 1,
+\end{equation}
+where each $r_i \in [0,1]$ is a normalized risk signal: audit prior, unsupported claim ratio, proof gap, necessity gap, and contradiction risk.
+\end{definition}
+
+\begin{definition}[Evidence Contract Deficit]
+For question $q$, answer $a$, and evidence set $\mathcal{E}$, the evidence-contract deficit is
+\begin{equation}
+D(q,a,\mathcal{E}) = w_O(1-\operatorname{cov}_{\mathcal{O}}) + w_C(1-\operatorname{cov}_{\mathcal{C}}) + w_T(1-\operatorname{cov}_{\text{terms}}) + w_S g_{\text{shape}},
+\end{equation}
+where the weights are non-negative and sum to one, and $g_{\text{shape}}$ measures answer-shape violations such as missing required facets or insufficient distinct points. The deficit is a runtime state used to trigger verification or rescue; it is not a gold-label correctness score.
+\end{definition}
+
+\begin{definition}[Upgrade Utility]
+The utility of escalation is the quality improvement obtained after spending additional retrieval or verification cost:
+\begin{equation}
+U_{\text{up}} = \Delta Q - \lambda \Delta \operatorname{cost},
+\end{equation}
+where $\Delta Q$ is measured only for offline analysis and is not available to the runtime policy. A central empirical question is whether a reference-free estimate of $D$ can predict positive $U_{\text{up}}$ rather than merely predict that a row is difficult.
+\end{definition}
+
+\textbf{Problem Statement.} Given $q$, $\mathcal{G}$, and a generated answer $a$, find: (1) a minimal proof subgraph $S^*$ that maximizes joint coverage; (2) the set of necessary evidence paths $N \subseteq S^*$; and (3) a submission decision $d^* \in \{\text{submit}, \text{monitor}, \text{block}, \text{abstain}\}$ that minimizes expected untrustworthiness.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Evidence Contract Construction}
+\label{sec:mps}
+% ══════════════════════════════════════════════════════════════
+
+The evidence contract is instantiated by making the question obligations and answer claims explicit, then selecting a compact evidence set that covers both. MPS is therefore not an isolated graph algorithm in the system; it is the contract-construction primitive that produces the evidence state consumed by routing and submission.
+
+\subsection{Algorithm}
+
+The MPS optimizer solves a bi-objective weighted set cover:
+\begin{equation}
+\max_{S \subseteq \mathcal{E}} \alpha \cdot \operatorname{cov}_{\mathcal{O}}(S) + (1-\alpha) \cdot \operatorname{cov}_{\mathcal{C}}(S) \quad \text{s.t.} |S| \leq K, \operatorname{tokens}(S) \leq B.
+\end{equation}
+
+At each step, the greedy algorithm selects the evidence node with the highest marginal utility:
+\begin{equation}
+e^* = \arg\max_{e \in \mathcal{E} \setminus S} \frac{\Delta \operatorname{cov}_{\mathcal{O}}(e | S) + \lambda \cdot \Delta \operatorname{cov}_{\mathcal{C}}(e | S)}{\operatorname{tokens}(e)}.
+\end{equation}
+
+\begin{algorithm}[t]
+\caption{Minimal Proof Subgraph Optimization}
+\label{alg:mps}
+\begin{algorithmic}[1]
+\REQUIRE Evidence set $\mathcal{E}$, obligations $\mathcal{O}$, claims $\mathcal{C}$, budget $K$, $B$
+\ENSURE Minimal proof subgraph $S^*$
+\STATE $S \leftarrow \emptyset$
+\WHILE{$|S| < K$ \AND $\operatorname{tokens}(S) < B$}
+\STATE $e^* \leftarrow \arg\max_{e \in \mathcal{E} \setminus S} \frac{\Delta \operatorname{cov}_{\mathcal{O}}(e|S) + \lambda \cdot \Delta \operatorname{cov}_{\mathcal{C}}(e|S)}{\operatorname{tokens}(e)}$
+\IF{$\Delta f(e^*|S) = 0$}
+\STATE \textbf{break} \COMMENT{No marginal gain}
+\ENDIF
+\STATE $S \leftarrow S \cup \{e^*\}$
+\ENDWHILE
+\STATE \textit{// Minimality certificate: leave-one-out redundancy check}
+\FOR{each $e_j \in S$}
+\IF{$\operatorname{cov}_{\mathcal{O}}(S \setminus \{e_j\}) \geq \tau_O$ \AND $\operatorname{cov}_{\mathcal{C}}(S \setminus \{e_j\}) \geq \tau_C$}
+\STATE $S \leftarrow S \setminus \{e_j\}$ \COMMENT{Prune redundant}
+\ENDIF
+\ENDFOR
+\RETURN $S$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Theoretical Guarantee}
+
+\begin{theorem}[Approximation Ratio]
+\label{thm:mps}
+Let $n = \max(P, M)$ where $P$ is the number of obligations and $M$ is the number of claims. The greedy algorithm (Algorithm~\ref{alg:mps}) achieves an approximation ratio of $O(\ln n)$ for the bi-objective weighted set cover problem.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The bi-objective function $f(S) = \alpha \cdot \operatorname{cov}_{\mathcal{O}}(S) + (1-\alpha) \cdot \operatorname{cov}_{\mathcal{C}}(S)$ is monotone submodular, as both coverage functions are submodular and a non-negative weighted sum of submodular functions is submodular. By the classical result of Nemhauser, Wolsey, and Fisher~\cite{nemhauser1978analysis}, the greedy algorithm for monotone submodular maximization under cardinality constraint achieves a $(1 - 1/e)$-approximation. For the weighted set cover formulation, the approximation ratio is $H_n = \sum_{i=1}^n 1/i = O(\ln n)$, where $H_n$ is the $n$-th harmonic number~\cite{chvatal1979greedy}.
+\end{proof}
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Deficit-Guided Escalation}
+\label{sec:cpn}
+% ══════════════════════════════════════════════════════════════
+
+After the initial contract is built, the system must decide whether additional verification or graph rescue is worth its cost. CPN supplies the intervention primitive: it measures which evidence paths are necessary and whether a proposed escalation can replace a weak path without losing supported content. In the frozen SAGE implementation, the learned router estimates severe contract gaps, while the deterministic guard enforces preservation after repair.
+
+\subsection{Intervention Framework}
+
+For each $e_j \in S^*$, we perform a counterfactual intervention: remove $e_j$ and re-run the MPS optimizer on $\mathcal{E} \setminus \{e_j\}$. Let $S_{-j}$ denote the resulting subgraph. We measure:
+
+\begin{itemize}
+\item \textbf{Claim loss}: $\Delta_C(e_j) = \operatorname{cov}_{\mathcal{C}}(S^*) - \operatorname{cov}_{\mathcal{C}}(S_{-j})$
+\item \textbf{Obligation loss}: $\Delta_O(e_j) = \operatorname{cov}_{\mathcal{O}}(S^*) - \operatorname{cov}_{\mathcal{O}}(S_{-j})$
+\item \textbf{Sufficiency loss}: $\mathbb{1}[\text{proof\_sufficient}(S^*) \wedge \neg\text{proof\_sufficient}(S_{-j})]$
+\item \textbf{Objective loss}: $\Delta_f(e_j) = f(S^*) - f(S_{-j})$
+\end{itemize}
+
+\subsection{Classification}
+
+Based on the loss patterns, each evidence path is classified into one of five categories: \textit{claim-essential} ($\Delta_C > 0$), \textit{sufficiency-critical} (sufficiency loss), \textit{obligation-critical} ($\Delta_O > 0$), \textit{efficiency-critical} ($\Delta_f \geq 0.05$), or \textit{replaceable} (all losses negligible).
+
+\begin{theorem}[Necessity Certification Correctness]
+\label{thm:cpn}
+Let $\epsilon$ be the coverage tolerance. The CPN certification has a false-positive rate (classifying replaceable evidence as necessary) of at most $\epsilon$, and a false-negative rate (classifying necessary evidence as replaceable) of $0$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The false-negative rate is $0$ because the leave-one-out intervention exactly tests the necessity condition from Definition~3. The false-positive rate arises only when the re-optimization finds an alternative evidence path that provides equivalent coverage within tolerance $\epsilon$, which occurs with probability at most $\epsilon$ under the coverage gap assumption.
+\end{proof}
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Controlled Repair and Submission}
+\label{sec:rcs}
+% ══════════════════════════════════════════════════════════════
+
+The final layer converts the contract state into an operational action: keep the text answer, escalate retrieval, accept a bounded repair, or abstain. RCS is the decision interface for this contract. The preservation guard is deliberately deterministic and reference-free at runtime; it can reject a repair that loses supported content even when the repair appears fluent.
+
+\subsection{Risk Score Formulation}
+
+Following Definition~\ref{def:risk}, the calibrated risk is:
+\begin{align}
+R(a, S) =\ & 0.34 \cdot r_{\text{audit}} + 0.26 \cdot r_{\text{unsupported}} + 0.18 \cdot r_{\text{proof\_gap}} \nonumber \\
+& + 0.10 \cdot r_{\text{necessity}} + 0.07 \cdot r_{\text{contradiction}}.
+\end{align}
+
+The submission policy applies hierarchical thresholds:
+\begin{itemize}
+\item \textbf{Submit}: $R \leq 0.22$, $\operatorname{cov}_{\mathcal{C}} \geq 0.95$, $\operatorname{cov}_{\mathcal{O}} \geq 0.66$
+\item \textbf{Submit with monitoring}: $R \leq 0.42$, $\operatorname{cov}_{\mathcal{C}} \geq 0.80$
+\item \textbf{Block}: unsupported claims $> 0$ or contradicted claims $> 0$
+\item \textbf{Defer/abstain}: otherwise
+\end{itemize}
+
+\subsection{PAC-Bayesian Generalization Bound}
+
+\begin{theorem}[Generalization Bound]
+\label{thm:rcs}
+Let $\mathcal{D}$ be the distribution over question-evidence pairs, $m$ the sample size, and $\delta \in (0, 1)$. With probability at least $1 - \delta$ over the draw of $m$ i.i.d.\ samples, for any submission policy $\pi$ in the policy class $\Pi$:
+\begin{equation}
+\mathbb{E}_{(q, \mathcal{E}) \sim \mathcal{D}}[\text{Untrust}(\pi(q, \mathcal{E}))] \leq \hat{R}_{\text{emp}}(\pi) + \sqrt{\frac{\operatorname{KL}(\pi \| \pi_0) + \ln(2m/\delta)}{m}},
+\end{equation}
+where $\hat{R}_{\text{emp}}(\pi)$ is the empirical risk, $\operatorname{KL}(\pi \| \pi_0)$ is the KL divergence from the prior policy $\pi_0$, and $\text{Untrust}(\cdot)$ measures answer untrustworthiness.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+This follows from the McAllester PAC-Bayesian theorem~\cite{mcallester1999pac}, applied to the policy class $\Pi$ of threshold-based submission rules parameterized by $(\tau_R, \tau_C, \tau_O)$. The calibrated risk score $R(a, S)$ provides a computable proxy for $\hat{R}_{\text{emp}}(\pi)$. The policy class complexity is bounded by $\operatorname{KL}(\pi \| \pi_0) \leq O(d \ln(m/d))$ where $d = 3$ is the number of threshold parameters.
+\end{proof}
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Experiments}
+\label{sec:experiments}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Datasets and Protocol}
+
+The current experimental package separates mechanism validation from frozen holdout evaluation. UltraDomain Mix130 is used for strict VSR ablation and candidate replay. Legal, Biology, and Domain-windowed slices provide external retrieval-baseline comparisons. Locked unseen75 and strict Repeat1--8 holdouts are source-line/source-context disjoint from prior development surfaces and are used only after freezing SAGE v33-preservation.
+
+\begin{table}[htbp]
+\caption{Current Evaluation Surfaces}
+\label{tab:datasets}
+\centering
+\begin{tabular}{lrl}
+\toprule
+Surface & Questions & Role \\
+\midrule
+UltraDomain Mix130 & 130 & Strict VSR ablation and candidate replay \\
+Legal/Biology/Domain external slices & 120 & Retrieval-baseline and semantic judge comparison \\
+Locked unseen75 & 75 & Primary post-freeze zero-overlap holdout \\
+Locked Repeat1--8 & 251 & Supplementary zero-overlap robustness and stress holdouts \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Baselines}
+
+We compare against \textbf{Naive RAG} and \textbf{HyDE} under same-context, same-metric settings. We also report \textbf{GraphRAG-lite} as a lightweight community graph baseline and \textbf{LightRAG current-130} as the evaluated representative heavy graph-RAG comparator. SAGE v33-preservation is treated as the frozen lead instantiation rather than a post-hoc tuned variant.
+
+\subsection{Metrics}
+
+We report lexical F1 and ROUGE-L, faithfulness, same-rubric LLM judge scores, pairwise A/B target win rates across five qualitative dimensions, runtime per question, and coverage/completion status. We keep lexical overlap and semantic judge results separate because they reward different answer properties.
+
+\subsection{Results}
+
+Tables~\ref{tab:strict-vsr-ablation-mix130}--\ref{tab:cost-latency-summary} are generated from completed artifacts by \texttt{experiments/build\_paper\_latex\_tables.py}; the corresponding Markdown/JSON package is stored under \texttt{results/paper\_tables/}.
+
+\input{generated_experiment_tables}
+
+\subsection{Interpretation}
+
+The strict ablation supports the VSR mechanism claim: verification, repair, and rescue improve the internal no-repair baseline and materially reduce abstention on Mix130. The stronger paper-facing method is SAGE v33-preservation, which is reproducible, frozen before locked holdout evaluation, and safer than the exploratory v56 branch despite v56's aggregate replay gains.
+
+Across locked unseen75 plus Repeat1--8, SAGE v33 improves weighted lexical F1 modestly and improves semantic judge quality substantially. Repeat8 is intentionally reported as a stress slice: it exhausts the remaining strict legal capacity, ties HyDE lexically, and trails Naive lexically, but it does not change the complete 326-row meta conclusion. We therefore frame the main claim as semantic-quality and preference improvement under strict holdouts, not as blanket lexical superiority over every retrieval baseline.
+
+\subsection{Mechanism Depth Audit}
+
+To test the central evidence-contract hypothesis directly, we aligned the frozen SAGE v33 Mix130 rows with the same-row `full\_v2\_rescue` outputs and computed a reference-free contract deficit from answer-shape and term-coverage signals. This is an observational audit rather than a randomized treatment comparison.
+
+\begin{table}[htbp]
+\caption{Evidence-Contract Mechanism Audit on Mix130}
+\label{tab:contract-depth}
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Group & N & Mean F1 Delta & Wins/Losses & Mean Router Probability \\
+\midrule
+All aligned rows & 130 & +0.1768 & 113/17 & 0.2440 \\
+Route skipped & 87 & +0.2089 & 83/4 & 0.0956 \\
+Route selected & 43 & +0.1119 & 30/13 & 0.2991 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The audit gives a useful negative result. Route-selected rows have larger estimated contract gaps and higher router probabilities, but they are also harder rows: their mean SAGE--VSR F1 delta is lower than for route-skipped rows. Router probability correlates negatively with the observed SAGE--VSR F1 delta ($r=-0.3782$), while the simple contract-gap proxy has a weaker negative correlation ($r=-0.1511$). Thus, the current contract mechanism is effective as a difficulty detector, but not yet as an upgrade-utility estimator. This separates two research problems that are often conflated: predicting that an answer is risky versus predicting that paying for escalation will improve it.
+
+The next method iteration should therefore learn or calibrate an impact-aware escalation score, using only reference-free runtime features and validating it on a new locked holdout. The current results do not justify claiming that every high-deficit row benefits from escalation.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Related Work}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Graph-based RAG}
+GraphRAG~\cite{edge2024graphrag} constructs community summaries from entity-relationship graphs for global retrieval. LightRAG~\cite{guo2024lightrag} employs dual-level retrieval combining entity and relationship matching. HippoRAG~\cite{gutierrez2024hipporag} uses personalized PageRank for multi-hop reasoning. None of these approaches formally verify whether the retrieved evidence constitutes a sufficient proof.
+
+\subsection{Evidence Verification in RAG}
+Self-RAG~\cite{asai2023self} introduces self-reflection tokens for retrieval gating. RAGAS~\cite{es2023ragas} provides automated evaluation metrics. ARES~\cite{yan2024ares} offers automated RAG evaluation. These approaches evaluate answer quality post-hoc but do not construct formal proof structures.
+
+\subsection{Proof-based Verification}
+EntailmentBank~\cite{dalvi2021entailment} generates multi-hop entailment trees. FOLIO~\cite{han2022folio} provides first-order logic reasoning. ProofWriter~\cite{tafjord2021proofwriter} performs natural language theorem proving. VSR-PathRAG is the first to combine formal proof structure with counterfactual necessity analysis and risk-calibrated submission gating.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Conclusion}
+% ══════════════════════════════════════════════════════════════
+
+We presented VSR-PathRAG as an evidence-contract-guided adaptive RAG framework. MPS, CPN, and RCS are unified as contract construction, deficit-guided escalation, and controlled submission primitives. The completed experiment package shows that the rescue-enhanced VSR layer improves the internal no-repair baseline, while the frozen SAGE v33-preservation instantiation improves semantic judge quality and pairwise preference on 326 strict locked-holdout rows. The mechanism audit also exposes the next scientific bottleneck: current contract-gap routing detects difficult rows, but its score is negatively associated with realized upgrade benefit. Future work should therefore target impact-aware escalation, official large-scale graph-baseline reruns, broader standard-benchmark validation, and human evaluation.
+
+
+% ══════════════════════════════════════════════════════════════
+\section*{Limitations}
+% ══════════════════════════════════════════════════════════════
+
+\begin{enumerate}
+\item \textbf{LLM dependency}: Claim extraction and evidence signing rely on LLM quality.
+\item \textbf{Scalability}: CPN's $O(|S| \times \text{MPS})$ complexity limits large $|S|$.
+\item \textbf{Domain generalization}: The current strongest locked evidence comes from UltraDomain-derived domain slices; broader standard-benchmark validation remains future work.
+\item \textbf{Baseline comparability}: GraphRAG-lite and LightRAG current-130 provide completed representative graph-RAG evidence, but full official graph-baseline reruns remain approximate or budget-dependent.
+\item \textbf{Metric tension}: SAGE v33 is strong on same-rubric judge and pairwise preference, while lexical F1 gains over Naive RAG and HyDE are modest and not uniformly positive on every stress slice.
+\item \textbf{Risk--benefit mismatch}: The current reference-free contract-gap router identifies difficult rows, but Mix130 analysis shows that high routing probability does not imply larger realized improvement after escalation.
+\item \textbf{Theory}: The PAC-Bayesian bound assumes i.i.d.\ sampling, which may not hold for conversational RAG.
+\end{enumerate}
+
+
+% ══════════════════════════════════════════════════════════════
+\begin{thebibliography}{99}
+% ══════════════════════════════════════════════════════════════
+
+\bibitem{edge2024graphrag}
+D.~Edge et al., ``From local to global: A graph rag approach to query-focused summarization,'' \textit{arXiv preprint arXiv:2404.16130}, 2024.
+
+\bibitem{guo2024lightrag}
+Z.~Guo et al., ``Lightrag: Simple and fast graph-based retrieval-augmented generation,'' \textit{arXiv preprint arXiv:2410.05779}, 2024.
+
+\bibitem{gutierrez2024hipporag}
+B.~J. Guti\'errez et al., ``Hipporag: Neurobiologically inspired long-term memory for large language models,'' \textit{NeurIPS}, 2024.
+
+\bibitem{asai2023self}
+A.~Asai et al., ``Self-rag: Learning to retrieve, generate, and critique through self-reflection,'' \textit{ICLR}, 2024.
+
+\bibitem{es2023ragas}
+S.~Es et al., ``Ragas: Automated evaluation of retrieval augmented generation,'' \textit{arXiv preprint arXiv:2309.15217}, 2023.
+
+\bibitem{yan2024ares}
+S.~Yan et al., ``Ares: Automated rag evaluation system,'' \textit{NAACL}, 2024.
+
+\bibitem{dalvi2021entailment}
+B.~Dalvi et al., ``Explaining answers with entailment trees,'' \textit{EMNLP}, 2021.
+
+\bibitem{han2022folio}
+S.~Han et al., ``Follio: Natural language reasoning with first-order logic,'' \textit{arXiv preprint arXiv:2209.00840}, 2022.
+
+\bibitem{tafjord2021proofwriter}
+O.~Tafjord et al., ``Proofwriter: Generating implications, proofs, and abductive statements over natural language,'' \textit{ACL Workshop}, 2021.
+
+\bibitem{nemhauser1978analysis}
+G.~L. Nemhauser, L.~A. Wolsey, and M.~L. Fisher, ``An analysis of approximations for maximizing submodular set functions--I,'' \textit{Mathematical Programming}, vol.~14, pp.~265--294, 1978.
+
+\bibitem{chvatal1979greedy}
+V.~Chv\'atal, ``A greedy heuristic for the set-covering problem,'' \textit{Mathematics of Operations Research}, vol.~4, no.~3, pp.~233--235, 1979.
+
+\bibitem{mcallester1999pac}
+D.~McAllester, ``Pac-bayesian model averaging,'' in \textit{COLT}, 1999, pp.~164--170.
+
+\bibitem{lewis2020retrieval}
+P.~Lewis et al., ``Retrieval-augmented generation for knowledge-intensive nlp tasks,'' \textit{NeurIPS}, 2020.
+
+\bibitem{gao2022hallucination}
+L.~Gao et al., ``The curse of hallucination in neural text generation,'' \textit{ACM Computing Surveys}, 2022.
+
+\bibitem{wei2022chain}
+J.~Wei et al., ``Chain-of-thought prompting elicits reasoning in large language models,'' \textit{NeurIPS}, 2022.
+
+\end{thebibliography}
+
+\end{document}

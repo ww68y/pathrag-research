@@ -16,8 +16,135 @@ mermaid.initialize({
   fontFamily: 'monospace'
 });
 
+const parseAgentTrace = (content) => {
+  if (typeof content !== 'string') {
+    return { answer: '', trace: null };
+  }
+  const marker = '\n---\n### KG-RAG Agent Trace';
+  const markerIndex = content.indexOf(marker);
+  if (markerIndex === -1) {
+    return { answer: content, trace: null };
+  }
+
+  const answer = content.slice(0, markerIndex).trim();
+  const traceText = content.slice(markerIndex + '\n---\n'.length).trim();
+  const meta = {};
+  traceText.split('\n').forEach((line) => {
+    const match = line.match(/^- \*\*(.+?):\*\* `?(.+?)`?$/);
+    if (match) {
+      meta[match[1].toLowerCase()] = match[2];
+    }
+  });
+
+  const rows = traceText
+    .split('\n')
+    .filter((line) => line.startsWith('|') && !line.includes('---'))
+    .slice(1)
+    .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()))
+    .filter((cells) => cells.length >= 4)
+    .map(([index, tool, decision, observation]) => ({
+      index,
+      tool,
+      decision,
+      observation,
+    }));
+
+  return {
+    answer,
+    trace: {
+      questionType: meta['question type'] || 'unknown',
+      answerContract: meta['answer contract'] || 'balanced',
+      budgetPolicy: meta['budget policy'] || 'refinement',
+      finalPolicy: meta['final policy'] || 'unknown',
+      selectedMode: meta['selected mode'] || 'unknown',
+      selectedProfile: meta['selected profile'] || 'unknown',
+      candidateCount: meta['candidate count'] || '1',
+      evidenceEdges: meta['evidence edges'] || '0',
+      queryPlan: meta['query plan'] || 'n/a',
+      knowledgeGap: meta['knowledge gap'] || 'n/a',
+      localGraphRepair: meta['local graph repair'] || '0 accepted/0 rejected',
+      counterfactualRollback: meta['counterfactual rollback'] || 'no',
+      evidencePortfolio: meta['evidence portfolio'] || 'n/a',
+      sourceConflicts: meta['source conflicts'] || 'n/a',
+      computeBudget: meta['compute budget'] || 'n/a',
+      activeAcquisition: meta['active acquisition'] || 'n/a',
+      claimVerification: meta['claim verification'] || 'n/a',
+      claimSafety: meta['claim safety'] || 'n/a',
+      experienceMemory: meta['experience memory'] || 'n/a',
+      experienceRoute: meta['experience route'] || 'n/a',
+      evidenceRepair: meta['evidence repair'] || 'unknown',
+      claimPrune: meta['claim prune'] || 'unknown',
+      facetCompletion: meta['facet completion'] || 'unknown',
+      claimSupport: meta['claim support'] || '0/0',
+      unsupportedClaims: meta['unsupported claims'] || '0',
+      facetCoverage: meta['facet coverage'] || '0/0',
+      structuredConfidence: meta['structured confidence'] || 'n/a',
+      evidenceAudit: meta['evidence audit'] || 'n/a',
+      riskFlags: meta['risk flags'] || 'none',
+      runtime: meta.runtime || '0s',
+      rows,
+    },
+  };
+};
+
+const AgentTracePanel = ({ trace }) => {
+  if (!trace) return null;
+  return (
+    <details className="agent-trace-panel">
+      <summary>
+        <span>KG-RAG Agent Trace</span>
+        <strong>{trace.finalPolicy}</strong>
+      </summary>
+      <div className="agent-trace-meta">
+        <span>Type: {trace.questionType}</span>
+        <span>Contract: {trace.answerContract}</span>
+        <span>Budget: {trace.budgetPolicy}</span>
+        <span>Mode: {trace.selectedMode}</span>
+        <span>Profile: {trace.selectedProfile}</span>
+        <span>Candidates: {trace.candidateCount}</span>
+        <span>Evidence: {trace.evidenceEdges}</span>
+        <span>Query plan: {trace.queryPlan}</span>
+        <span>Graph gap: {trace.knowledgeGap}</span>
+        <span>Local repair: {trace.localGraphRepair}</span>
+        <span>Rollback: {trace.counterfactualRollback}</span>
+        <span>Portfolio: {trace.evidencePortfolio}</span>
+        <span>Conflicts: {trace.sourceConflicts}</span>
+        <span>Compute: {trace.computeBudget}</span>
+        <span>Active evidence: {trace.activeAcquisition}</span>
+        <span>Claim verification: {trace.claimVerification}</span>
+        <span>Claim safety: {trace.claimSafety}</span>
+        <span>Memory: {trace.experienceMemory}</span>
+        <span>Memory route: {trace.experienceRoute}</span>
+        <span>Repair: {trace.evidenceRepair}</span>
+        <span>Prune: {trace.claimPrune}</span>
+        <span>Facet: {trace.facetCompletion}</span>
+        <span>Claims: {trace.claimSupport}</span>
+        <span>Unsupported: {trace.unsupportedClaims}</span>
+        <span>Coverage: {trace.facetCoverage}</span>
+        <span>Confidence: {trace.structuredConfidence}</span>
+        <span>Audit: {trace.evidenceAudit}</span>
+        <span>Risk: {trace.riskFlags}</span>
+        <span>Runtime: {trace.runtime}</span>
+      </div>
+      <div className="agent-trace-steps">
+        {trace.rows.map((row) => (
+          <article className="agent-trace-step" key={`${row.index}-${row.tool}-${row.decision}`}>
+            <div>
+              <span>#{row.index}</span>
+              <strong>{row.tool}</strong>
+              <em>{row.decision}</em>
+            </div>
+            <p>{row.observation}</p>
+          </article>
+        ))}
+      </div>
+    </details>
+  );
+};
+
 const ChatMessage = ({ message, isUser }) => {
   const { currentUser } = useAuth();
+  const { answer, trace } = !isUser ? parseAgentTrace(message) : { answer: message, trace: null };
 
   useEffect(() => {
     // Process any mermaid diagrams after component mounts
@@ -67,7 +194,7 @@ const ChatMessage = ({ message, isUser }) => {
   };
 
   // Process content for mermaid diagrams if it's a bot message
-  const processedContent = !isUser ? processMermaidBlocks(message) : message;
+  const processedContent = !isUser ? processMermaidBlocks(answer) : answer;
 
   return (
     <div className={`chat-message ${isUser ? 'user-message' : 'ai-message'}`}>
@@ -112,9 +239,10 @@ const ChatMessage = ({ message, isUser }) => {
               >
                 {processedContent}
               </ReactMarkdown>
+              <AgentTracePanel trace={trace} />
             </div>
           ) : (
-            <div className="text-content">{message}</div>
+            <div className="text-content">{answer}</div>
           )}
         </div>
 

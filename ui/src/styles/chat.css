@@ -358,6 +358,116 @@
   margin-bottom: 1rem;
 }
 
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-content th {
+  background: rgba(25, 118, 210, 0.08);
+  font-weight: 700;
+}
+
+.markdown-content code {
+  white-space: normal;
+}
+
+.agent-trace-panel {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(25, 118, 210, 0.05);
+  overflow: hidden;
+}
+
+.agent-trace-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 10px 12px;
+  list-style: none;
+  font-weight: 700;
+}
+
+.agent-trace-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-trace-panel summary strong {
+  color: var(--primary);
+  font-size: 0.85rem;
+  word-break: keep-all;
+}
+
+.agent-trace-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 10px;
+  color: var(--textMuted);
+  font-size: 0.85rem;
+}
+
+.agent-trace-meta span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.agent-trace-steps {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.agent-trace-step {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--contentBg);
+  padding: 10px;
+}
+
+.agent-trace-step div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.agent-trace-step span {
+  color: var(--textMuted);
+  font-size: 0.8rem;
+}
+
+.agent-trace-step strong {
+  color: var(--text);
+}
+
+.agent-trace-step em {
+  margin-left: auto;
+  color: var(--primary);
+  font-style: normal;
+  font-size: 0.85rem;
+}
+
+.agent-trace-step p {
+  margin: 0;
+  color: var(--textMuted);
+  font-size: 0.9rem;
+}
+
 .markdown-content ul,
 .markdown-content ol {
   margin-left: 1.5rem;

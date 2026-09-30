@@ -35,6 +35,35 @@ from .base import (
 from .prompt import GRAPH_FIELD_SEP, PROMPTS
 
 
+def _parse_keywords_response(result: str) -> Union[dict, None]:
+    """Parse keyword JSON from LLM output with light tolerance for formatting drift."""
+    cleaned = result.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    candidates = [cleaned]
+    if cleaned.startswith("{{") and cleaned.endswith("}}"):
+        candidates.append(cleaned[1:-1].strip())
+
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if match:
+        candidates.append(match.group(0))
+        matched = match.group(0).strip()
+        if matched.startswith("{{") and matched.endswith("}}"):
+            candidates.append(matched[1:-1].strip())
+
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+
+    return None
+
+
 def chunking_by_token_size(
     content: str, overlap_token_size=128, max_token_size=1024, tiktoken_model="gpt-4o"
 ):
@@ -497,24 +526,14 @@ async def kg_query(
     result = await use_model_func(kw_prompt, keyword_extraction=True)
     logger.info("kw_prompt result:")
     print(result)
-    try:
-
-        match = re.search(r"\{.*\}", result, re.DOTALL)
-        if match:
-            result = match.group(0)
-            keywords_data = json.loads(result)
-
-            hl_keywords = keywords_data.get("high_level_keywords", [])
-            ll_keywords = keywords_data.get("low_level_keywords", [])
-        else:
-            logger.error("No JSON-like structure found in the result.")
-            return PROMPTS["fail_response"]
-
-
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e} {result}")
+    keywords_data = _parse_keywords_response(result)
+    if keywords_data is None:
+        logger.error("Failed to parse keyword extraction response.")
+        print(f"JSON parsing error: {result}")
         return PROMPTS["fail_response"]
 
+    hl_keywords = keywords_data.get("high_level_keywords", [])
+    ll_keywords = keywords_data.get("low_level_keywords", [])
 
     if hl_keywords == [] and ll_keywords == []:
         logger.warning("low_level_keywords and high_level_keywords is empty")
@@ -595,6 +614,7 @@ async def _build_query_context(
 ):
     ll_entities_context, ll_relations_context, ll_text_units_context = "", "", ""
     hl_entities_context, hl_relations_context, hl_text_units_context = "", "", ""
+    text_units_context = ""
 
     ll_kewwords, hl_keywrds = query[0], query[1]
     if query_param.mode in ["local", "hybrid"]:
@@ -656,6 +676,10 @@ async def _build_query_context(
             [ll_entities_context, ll_relations_context],
             [hl_text_units_context, ll_text_units_context],
         )
+    elif query_param.mode == "local":
+        text_units_context = ll_text_units_context
+    elif query_param.mode == "global":
+        text_units_context = hl_text_units_context
 
 
     return f"""

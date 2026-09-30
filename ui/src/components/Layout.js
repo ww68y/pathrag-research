@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faTachometerAlt,
   faComments,
+  faRobot,
   faProjectDiagram,
   faFileAlt,
   faSignOutAlt,
@@ -15,7 +16,9 @@ import {
   faPalette,
   faBars,
   faCog,
-  faPlus
+  faPlus,
+  faRoute,
+  faRocket
 } from '@fortawesome/free-solid-svg-icons';
 
 const Layout = ({ children }) => {
@@ -205,10 +208,62 @@ const Layout = ({ children }) => {
               </Nav.Item>
 
               <Nav.Item
+                eventKey="/agent-chat"
+                icon={<FontAwesomeIcon icon={faRobot} className="nav-icon" />}
+                style={{ background: 'linear-gradient(90deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)' }}
+                onClick={() => {
+                  // Check if there's an agent thread UUID in localStorage
+                  const agentThreadId = localStorage.getItem('current_agent_thread_uuid');
+                  if (agentThreadId) {
+                    navigate(`/agent-chat/${agentThreadId}`);
+                  } else {
+                    // Create a new agent thread
+                    (async () => {
+                      try {
+                        const response = await chatAPI.createThread("Agent Chat");
+                        if (response && response.data && response.data.uuid) {
+                          localStorage.setItem('current_agent_thread_uuid', response.data.uuid);
+                          navigate(`/agent-chat/${response.data.uuid}`);
+                        }
+                      } catch (error) {
+                        console.error("Failed to create new agent chat thread", error);
+                        navigate('/agent-chat');
+                      }
+                    })();
+                  }
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>🤖 Agent</span>
+              </Nav.Item>
+
+              <Nav.Item
                 eventKey="/knowledge-graph"
                 icon={<FontAwesomeIcon icon={faProjectDiagram} className="nav-icon" />}
               >
                 Knowledge Graph
+              </Nav.Item>
+
+              <Nav.Item
+                eventKey="/evidence-trace"
+                icon={<FontAwesomeIcon icon={faRoute} className="nav-icon" />}
+              >
+                Evidence Trace
+              </Nav.Item>
+
+              <Nav.Item
+                eventKey="/innovations"
+                icon={<FontAwesomeIcon icon={faRocket} className="nav-icon" />}
+                style={{ background: 'linear-gradient(90deg, rgba(255, 107, 107, 0.2) 0%, rgba(238, 90, 111, 0.2) 100%)' }}
+              >
+                <span style={{ fontWeight: 600 }}>🚀 Innovations</span>
+              </Nav.Item>
+
+              <Nav.Item
+                eventKey="/innovation-hub"
+                icon={<FontAwesomeIcon icon={faRocket} className="nav-icon" />}
+                style={{ background: 'linear-gradient(90deg, rgba(0, 210, 255, 0.15) 0%, rgba(58, 123, 213, 0.15) 100%)', borderLeft: '3px solid #00d2ff' }}
+              >
+                <span style={{ fontWeight: 600 }}>🌟 创新中心</span>
               </Nav.Item>
 
               <Nav.Item
@@ -364,7 +419,11 @@ const Layout = ({ children }) => {
             }}>
               {location.pathname === '/' && 'Dashboard'}
               {location.pathname === '/chat' && 'Chats'}
+              {location.pathname.startsWith('/chat/') && 'Chats'}
               {location.pathname === '/knowledge-graph' && 'Knowledge Graph'}
+              {location.pathname === '/evidence-trace' && 'Evidence Trace'}
+              {location.pathname === '/innovations' && 'Innovations'}
+              {location.pathname === '/innovation-hub' && '🌟 创新中心 (V136-V143)'}
               {location.pathname === '/documents' && 'Documents'}
             </div>
 

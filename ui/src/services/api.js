@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get API URL from environment variable or use default
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -43,10 +43,13 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: (username, password) => {
-    const formData = new FormData();
+    // FastAPI's OAuth2PasswordRequestForm expects URL-encoded fields.
+    // Use URLSearchParams rather than FormData so the browser sends the
+    // body with the declared content type consistently.
+    const formData = new URLSearchParams();
     formData.append('username', username);
     formData.append('password', password);
-    return api.post('/token', formData, {
+    return api.post('/token', formData.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -89,6 +92,16 @@ export const chatAPI = {
       thread_uuid: threadUuid
     });
   },
+  sendAgentChatToThread: (threadUuid, searchContext, message) => {
+    return api.post(`/chats/agent/${threadUuid}`, {
+      message,
+      search_context: searchContext,
+      thread_uuid: threadUuid
+    });
+  },
+  getRecentAgentTraces: (limit = 20) => api.get('/chats/agent-traces/recent', {
+    params: { limit },
+  }),
   getChat: (id) => api.get(`/chats/${id}`),
 };
 
@@ -117,6 +130,12 @@ export const documentAPI = {
 export const knowledgeGraphAPI = {
   getGraph: () => api.get('/knowledge-graph'),
   queryGraph: (query) => api.post('/knowledge-graph/query', { query }),
+  getEvidenceTraces: (fileName, limit = 50) => api.get('/knowledge-graph/evidence-traces', {
+    params: {
+      file_name: fileName,
+      limit,
+    },
+  }),
 };
 
 export default api;

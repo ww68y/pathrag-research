@@ -10,8 +10,12 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import ChatPage from './pages/ChatPage';
+import AgentChatPage from './pages/AgentChatPage';
 import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
 import DocumentsPage from './pages/DocumentsPage';
+import EvidenceTracePage from './pages/EvidenceTracePage';
+import InnovationPage from './pages/InnovationPage';
+import InnovationHubPage from './pages/InnovationHubPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -45,9 +49,34 @@ function App() {
             <ChatPage />
           </ProtectedRoute>
         } />
+        <Route path="/agent-chat" element={
+          <ProtectedRoute>
+            <AgentChatPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/agent-chat/:threadId" element={
+          <ProtectedRoute>
+            <AgentChatPage />
+          </ProtectedRoute>
+        } />
         <Route path="/knowledge-graph" element={
           <ProtectedRoute>
             <KnowledgeGraphPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/evidence-trace" element={
+          <ProtectedRoute>
+            <EvidenceTracePage />
+          </ProtectedRoute>
+        } />
+        <Route path="/innovations" element={
+          <ProtectedRoute>
+            <InnovationPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/innovation-hub" element={
+          <ProtectedRoute>
+            <InnovationHubPage />
           </ProtectedRoute>
         } />
         <Route path="/documents" element={

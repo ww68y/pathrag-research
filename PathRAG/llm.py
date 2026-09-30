@@ -6,14 +6,26 @@ import re
 import struct
 from functools import lru_cache
 from typing import List, Dict, Callable, Any, Union, Optional
-import aioboto3
+try:
+    import aioboto3
+except ImportError:
+    aioboto3 = None
 import aiohttp
 import numpy as np
-import ollama
+try:
+    import ollama
+except ImportError:
+    ollama = None
 import torch
 import time
-import modelscope as ms
-from vllm import LLM
+try:
+    import modelscope as ms
+except ImportError:
+    ms = None
+try:
+    from vllm import LLM
+except ImportError:
+    LLM = None
 from openai import (
     AsyncOpenAI,
     APIConnectionError,

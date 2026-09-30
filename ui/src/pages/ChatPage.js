@@ -121,7 +121,9 @@ const ChatPage = () => {
     try {
       // Send message to API with thread UUID and search mode
       console.log(`Sending message to thread ${currentThreadId} with search mode: ${searchContext}`);
-      const response = await chatAPI.sendChatToThread(currentThreadId, searchContext, message);
+      const response = searchContext === 'agent'
+        ? await chatAPI.sendAgentChatToThread(currentThreadId, searchContext, message)
+        : await chatAPI.sendChatToThread(currentThreadId, searchContext, message);
 
       if (response && response.data) {
         // Refresh the thread to get both user message and AI response

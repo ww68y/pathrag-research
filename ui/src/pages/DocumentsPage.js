@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Modal, Message } from 'rsuite';
+import { Button, Modal, Message, toaster } from 'rsuite';
 import Layout from '../components/Layout';
 import DocumentList from '../components/documents/DocumentList';
 import DocumentUploader from '../components/documents/DocumentUploader';
@@ -46,11 +46,21 @@ const DocumentsPage = () => {
       setReloading(true);
       const response = await documentAPI.reloadDocuments();
       if (response && response.data && response.data.success) {
-        Message.success(response.data.message || 'Documents reloaded successfully');
+        toaster.push(
+          <Message type="success" showIcon closable>
+            {response.data.message || 'Documents reloaded successfully'}
+          </Message>,
+          { placement: 'topEnd' }
+        );
       }
     } catch (error) {
       console.error('Error reloading documents:', error);
-      Message.error('Failed to reload documents. Please try again.');
+      toaster.push(
+        <Message type="error" showIcon closable>
+          Failed to reload documents. Please try again.
+        </Message>,
+        { placement: 'topEnd' }
+      );
     } finally {
       setReloading(false);
     }

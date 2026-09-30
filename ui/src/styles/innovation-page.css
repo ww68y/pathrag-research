@@ -1,0 +1,239 @@
+/* Innovation Page Styles */
+.innovation-page {
+  padding: 20px;
+  min-height: calc(100vh - 56px);
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 30px 20px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.page-header h1 {
+  font-size: 2.5rem;
+  margin: 0 0 12px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-header p {
+  font-size: 1.2rem;
+  color: #666;
+  margin: 0;
+}
+
+/* Modal Styles */
+.module-detail-modal .rs-modal-content {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.module-detail-modal .rs-modal-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+}
+
+.module-detail-modal .rs-modal-title {
+  color: white;
+  margin: 0;
+}
+
+.modal-title-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.modal-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.modal-title-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-title-text .module-id {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.modal-title-text h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.module-detail-content {
+  padding: 8px;
+}
+
+.module-description {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: #444;
+  margin-bottom: 24px;
+}
+
+.detail-section {
+  margin-bottom: 24px;
+}
+
+.detail-section h4 {
+  font-size: 1.1rem;
+  color: #333;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.detail-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.detail-section li {
+  padding: 6px 0;
+  color: #555;
+  line-height: 1.5;
+}
+
+.benefits-list li {
+  position: relative;
+  padding-left: 24px;
+}
+
+.benefits-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #27AE60;
+  font-weight: bold;
+}
+
+.use-cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.use-case-tag {
+  background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+  color: #667eea;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.module-metrics {
+  display: flex;
+  gap: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 20px;
+}
+
+.module-metrics .metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.module-metrics .metric-label {
+  font-size: 0.85rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .innovation-page {
+    padding: 12px;
+  }
+  
+  .page-header {
+    padding: 20px 16px;
+  }
+  
+  .page-header h1 {
+    font-size: 1.8rem;
+  }
+  
+  .page-header p {
+    font-size: 1rem;
+  }
+  
+  .modal-title-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .modal-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.4rem;
+  }
+  
+  .module-description {
+    font-size: 1rem;
+  }
+  
+  .module-metrics {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .innovation-page {
+    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+  }
+  
+  .page-header {
+    background: #2d3748;
+  }
+  
+  .page-header p {
+    color: #a0aec0;
+  }
+  
+  .module-detail-modal .rs-modal-content {
+    background: #2d3748;
+  }
+  
+  .module-description {
+    color: #e2e8f0;
+  }
+  
+  .detail-section h4 {
+    color: #e2e8f0;
+  }
+  
+  .detail-section li {
+    color: #a0aec0;
+  }
+  
+  .module-metrics {
+    border-color: #4a5568;
+  }
+  
+  .module-metrics .metric-label {
+    color: #a0aec0;
+  }
+}

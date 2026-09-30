@@ -1,0 +1,28 @@
+Title: Aurora Battery Pilot Project
+
+In March 2025, GreenVolt Energy launched the Aurora Battery Pilot Project in Sunvale City. The project was designed to test a new modular battery system for electric buses. GreenVolt Energy was responsible for system design, battery management software, and final integration.
+
+The project director was Dr. Lin Mei, a senior engineer at GreenVolt Energy. She worked with Mark Chen, the operations manager of Sunvale Transit Authority. Sunvale Transit Authority provided twelve electric buses and two charging stations for the pilot test.
+
+BlueLake Materials supplied the lithium iron phosphate battery cells used in the Aurora system. Northwind Logistics transported the battery cells from BlueLake Materials to the Qinghe Assembly Plant. The Qinghe Assembly Plant assembled the battery modules and sent completed units to Sunvale City.
+
+The Aurora battery system had three main goals. First, it aimed to extend bus operating range from 210 kilometers to 280 kilometers per charge. Second, it reduced overnight charging time from six hours to four hours. Third, it improved battery safety by adding real-time temperature monitoring and automatic fault isolation.
+
+During the first month of testing, two buses reported abnormal temperature warnings. Dr. Lin Mei traced the problem to a faulty cooling valve produced by Riverstone Components. GreenVolt Energy replaced the cooling valve with a redesigned part from Riverstone Components, and the warnings stopped after the replacement.
+
+The pilot project also included an environmental evaluation. Sunvale University measured energy consumption, carbon emissions, and maintenance cost. According to the evaluation report, the Aurora system reduced electricity consumption by 8 percent compared with the old battery system. It also reduced maintenance cost by 12 percent because the modular battery design made damaged modules easier to replace.
+
+In June 2025, Sunvale Transit Authority decided to expand the pilot from twelve buses to forty buses. The expansion contract required GreenVolt Energy to deliver twenty-eight additional Aurora battery systems before October 2025. BlueLake Materials agreed to increase battery cell supply, while Northwind Logistics added weekly shipments to keep the schedule stable.
+
+The main risk of the expansion was supply delay. If BlueLake Materials could not deliver enough battery cells, GreenVolt Energy would not finish assembly on time. To reduce this risk, Dr. Lin Mei asked GreenVolt Energy to qualify a backup supplier named SilverPeak Cells. SilverPeak Cells passed the quality test in August 2025 and became the backup supplier for the Aurora Battery Pilot Project.
+
+Useful facts for testing:
+- GreenVolt Energy designed and integrated the Aurora battery system.
+- Dr. Lin Mei directed the project.
+- Sunvale Transit Authority provided buses and charging stations.
+- BlueLake Materials supplied battery cells.
+- Northwind Logistics transported battery cells.
+- Qinghe Assembly Plant assembled battery modules.
+- Riverstone Components produced the faulty cooling valve.
+- Sunvale University evaluated energy consumption, carbon emissions, and maintenance cost.
+- SilverPeak Cells became the backup supplier after passing the quality test.

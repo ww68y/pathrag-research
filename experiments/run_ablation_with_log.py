@@ -1,0 +1,362 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Run ablation study with direct file logging.
+"""
+import asyncio
+import json
+import os
+import sys
+import time
+import statistics
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from dotenv import load_dotenv
+load_dotenv(ROOT_DIR / ".env")
+
+from openai import AsyncOpenAI
+from experiments.run_enhanced_experiments import (
+    load_ultradomain_full, get_api_config,
+    compute_f1, compute_rouge_l, compute_exact_match, compute_contains,
+    aggregate_results, bootstrap_ci, paired_t_test, wilcoxon_signed_rank_test, cohens_d,
+)
+from experiments.run_enhanced_ablation import run_vsr_ablation
+
+
+# Direct file logger
+LOGFILE = ROOT_DIR / "logs" / "ablation_direct.log"
+
+def log(msg):
+    """Print and write to log file."""
+    print(msg, flush=True)
+    with open(LOGFILE, "a", encoding="utf-8", errors="replace") as f:
+        f.write(msg + "\n")
+        f.flush()
+
+
+def safe_name(config):
+    return config.replace("/", "_")
+
+
+async def run_ablation_config(questions, config, ablation_config):
+    sname = safe_name(ablation_config)
+    log(f"\n{'='*60}")
+    log(f"Ablation: {ablation_config} (file: {sname}) on {len(questions)} questions")
+    log(f"{'='*60}")
+    
+    results = []
+    for i, q in enumerate(questions):
+        log(f"[{i+1}/{len(questions)}] Q: {q['question'][:60]}...")
+        start = time.time()
+        retries = 0
+        max_retries = 3
+        while retries < max_retries:
+            try:
+                answer, trace = await run_vsr_ablation(
+                    q["question"], q["context"], config, ablation_config
+                )
+                elapsed = time.time() - start
+                f1 = compute_f1(answer, q["gold_answer"])
+                rouge_l = compute_rouge_l(answer, q["gold_answer"])
+                em = compute_exact_match(answer, q["gold_answer"])
+                contains = compute_contains(answer, q["gold_answer"])
+                faith = trace.get("faithfulness", 0)
+                repair = trace.get("repair_triggered", False)
+                log(f"  F1={f1:.3f} R-L={rouge_l:.3f} Time={elapsed:.1f}s Faith={faith:.2f} Repair={'Y' if repair else 'N'}")
+                results.append({
+                    "question_id": q["question_id"],
+                    "prediction": answer,
+                    "method": ablation_config,
+                    "domain": q.get("domain", ""),
+                    "metrics": {
+                        "f1": f1, "rouge_l": rouge_l, "exact_match": em,
+                        "contains": contains, "runtime_seconds": elapsed,
+                        "faithfulness": faith, "repair_triggered": repair,
+                    },
+                })
+                break
+            except Exception as e:
+                retries += 1
+                elapsed = time.time() - start
+                log(f"  ERROR (retry {retries}/{max_retries}): {e}")
+                if retries >= max_retries:
+                    results.append({
+                        "question_id": q["question_id"],
+                        "prediction": f"Error: {e}",
+                        "method": ablation_config,
+                        "domain": q.get("domain", ""),
+                        "metrics": {"f1": 0, "rouge_l": 0, "exact_match": 0,
+                                    "contains": 0, "runtime_seconds": elapsed,
+                                    "faithfulness": 0, "repair_triggered": False},
+                        "error": str(e),
+                    })
+                else:
+                    await asyncio.sleep(5 * retries)
+    
+    return results
+
+
+async def main():
+    # Clear log file
+    LOGFILE.write_text("", encoding="utf-8")
+    
+    log("=" * 70)
+    log("ABLATION STUDY (5 configs x 130 questions)")
+    log("=" * 70)
+    
+    config = get_api_config()
+    log(f"Model: {config['model']}")
+    log(f"API Base: {config['base_url']}")
+    
+    if not config["api_key"]:
+        log("ERROR: API key not set!")
+        return
+    
+    questions = load_ultradomain_full()
+    
+    ablation_dir = ROOT_DIR / "results" / "enhanced_ablation"
+    ablation_dir.mkdir(parents=True, exist_ok=True)
+    
+    ablation_configs = ["w/o_all", "w/o_evidence_extraction", "w/o_verification", "w/o_repair", "full"]
+    all_results = {}
+    all_aggregated = {}
+    
+    for ablation_config in ablation_configs:
+        sname = safe_name(ablation_config)
+        output_file = ablation_dir / f"{sname}_n130.json"
+        
+        # Check if already done
+        if output_file.exists():
+            try:
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                n = len(data.get("results", []))
+                if n >= 130:
+                    all_results[ablation_config] = data.get("results", [])
+                    all_aggregated[ablation_config] = data.get("aggregated", {})
+                    log(f"Already done: {ablation_config} ({n} results)")
+                    continue
+            except:
+                pass
+        
+        log(f"\n[ABLATION] Starting {ablation_config}...")
+        results = await run_ablation_config(questions, config, ablation_config)
+        all_results[ablation_config] = results
+        all_aggregated[ablation_config] = aggregate_results(results, ablation_config)
+        
+        # Save immediately with safe filename
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                "ablation": ablation_config,
+                "ablation_safe_name": sname,
+                "dataset": "ultradomain",
+                "sample_size": len(results),
+                "aggregated": all_aggregated[ablation_config],
+                "results": results,
+            }, f, ensure_ascii=False, indent=2, default=str)
+        log(f"  Saved to: {output_file}")
+    
+    # Save summary
+    summary_file = ablation_dir / "ablation_study_n130.json"
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        json.dump({
+            "experiment": "enhanced_ablation_study",
+            "dataset": "ultradomain",
+            "sample_size": len(questions),
+            "aggregated": all_aggregated,
+        }, f, ensure_ascii=False, indent=2, default=str)
+    log(f"\nAblation summary saved to: {summary_file}")
+    
+    # Print results table
+    log(f"\n{'='*70}")
+    log(f"Ablation Results (UltraDomain, n={len(questions)})")
+    log(f"{'='*70}")
+    log(f"{'Config':<25} {'F1':>8} {'ROUGE-L':>8} {'EM':>6} {'Faith':>8} {'Repair%':>8}")
+    log(f"{'-'*70}")
+    for config_name, agg in all_aggregated.items():
+        log(f"{config_name:<25} {agg['mean_f1']:8.3f} {agg['mean_rouge_l']:8.3f} "
+            f"{agg['mean_em']:6.1%} {agg['mean_faithfulness']:8.3f} {agg['repair_rate']:7.1%}")
+    
+    # Statistical tests
+    log(f"\n{'='*70}")
+    log("Ablation Statistical Tests (full vs each)")
+    log(f"{'='*70}")
+    
+    stat_tests = {}
+    for metric in ["f1", "rouge_l", "faithfulness"]:
+        log(f"\n--- {metric} ---")
+        log(f"{'Config':<25} {'Diff':>8} {'t-p':>10} {'w-p':>10} {'d':>8} {'Sig?':>6}")
+        tests = []
+        for config_name in ablation_configs:
+            if config_name == "full":
+                continue
+            scores_full = [r["metrics"][metric] for r in all_results["full"]]
+            scores_abl = [r["metrics"][metric] for r in all_results[config_name]]
+            if len(scores_full) != len(scores_abl) or len(scores_full) < 5:
+                continue
+            t_stat, t_p = paired_t_test(scores_full, scores_abl)
+            w_stat, w_p = wilcoxon_signed_rank_test(scores_full, scores_abl)
+            d = cohens_d(scores_full, scores_abl)
+            diffs = [s1 - s2 for s1, s2 in zip(scores_full, scores_abl)]
+            ci = bootstrap_ci(diffs)
+            mean_diff = statistics.mean(diffs)
+            sig = "***" if t_p < 0.001 else ("**" if t_p < 0.01 else ("*" if t_p < 0.05 else ""))
+            log(f"{config_name:<25} {mean_diff:+8.4f} {t_p:10.4f} {w_p:10.4f} {d:+8.2f} {sig:>6}")
+            tests.append({
+                "ablation": config_name, "metric": metric,
+                "mean_diff": mean_diff,
+                "t_statistic": t_stat, "t_p_value": t_p,
+                "wilcoxon_stat": w_stat, "wilcoxon_p_value": w_p,
+                "cohens_d": d, "bootstrap_ci": ci,
+                "significant_at_0.05": min(t_p, w_p) < 0.05,
+            })
+        stat_tests[metric] = tests
+    
+    # Save stat tests
+    stat_file = ablation_dir / "ablation_stat_tests.json"
+    with open(stat_file, 'w', encoding='utf-8') as f:
+        json.dump(stat_tests, f, ensure_ascii=False, indent=2, default=str)
+    log(f"\nStatistical tests saved to: {stat_file}")
+    
+    # Per-domain
+    log(f"\n{'='*70}")
+    log("Per-Domain Analysis (F1)")
+    log(f"{'='*70}")
+    domains = sorted(set(q.get("domain", "") for q in questions if q.get("domain", "")))
+    header = f"{'Domain':<20}"
+    for config_name in ablation_configs:
+        header += f" {safe_name(config_name)[:12]:>13}"
+    log(header)
+    log("-" * (20 + 14 * len(ablation_configs)))
+    for domain in domains:
+        line = f"{domain:<20}"
+        for config_name in ablation_configs:
+            domain_results = [r for r in all_results[config_name] if r.get("domain") == domain]
+            if domain_results:
+                mean_f1 = statistics.mean(r["metrics"]["f1"] for r in domain_results)
+                line += f" {mean_f1:13.3f}"
+            else:
+                line += f" {'N/A':>13}"
+        log(line)
+    
+    # Comparison stat tests
+    log(f"\n{'='*70}")
+    log("COMPARISON Statistical Tests (loading existing comparison data)")
+    log(f"{'='*70}")
+    
+    enh_dir = ROOT_DIR / "results" / "enhanced"
+    comp_results = {}
+    comp_agg = {}
+    for f in sorted(os.listdir(enh_dir)):
+        if f.endswith("_n130.json") and f != "enhanced_comparison_n130.json":
+            method = f.replace("_n130.json", "")
+            fpath = enh_dir / f
+            try:
+                with open(fpath, 'r', encoding='utf-8') as fh:
+                    data = json.load(fh)
+                comp_results[method] = data.get("results", [])
+                comp_agg[method] = data.get("aggregated", {})
+            except:
+                pass
+    
+    comp_methods = list(comp_results.keys())
+    log(f"\nComparison methods loaded: {comp_methods}")
+    
+    comp_stat_tests = {}
+    for metric in ["f1", "rouge_l", "faithfulness"]:
+        log(f"\n--- {metric} ---")
+        log(f"{'M1':<20} {'M2':<20} {'Diff':>8} {'t-p':>10} {'w-p':>10} {'d':>8} {'Sig?':>6}")
+        tests = []
+        for i, m1 in enumerate(comp_methods):
+            for j, m2 in enumerate(comp_methods):
+                if i >= j:
+                    continue
+                scores1 = [r["metrics"][metric] for r in comp_results[m1]]
+                scores2 = [r["metrics"][metric] for r in comp_results[m2]]
+                if len(scores1) != len(scores2) or len(scores1) < 5:
+                    continue
+                t_stat, t_p = paired_t_test(scores1, scores2)
+                w_stat, w_p = wilcoxon_signed_rank_test(scores1, scores2)
+                d = cohens_d(scores1, scores2)
+                diffs = [s1 - s2 for s1, s2 in zip(scores1, scores2)]
+                ci = bootstrap_ci(diffs)
+                mean_diff = statistics.mean(diffs)
+                sig = "***" if t_p < 0.001 else ("**" if t_p < 0.01 else ("*" if t_p < 0.05 else ""))
+                log(f"{m1:<20} {m2:<20} {mean_diff:+8.4f} {t_p:10.4f} {w_p:10.4f} {d:+8.2f} {sig:>6}")
+                tests.append({
+                    "method_1": m1, "method_2": m2, "metric": metric,
+                    "mean_diff": mean_diff,
+                    "t_statistic": t_stat, "t_p_value": t_p,
+                    "wilcoxon_stat": w_stat, "wilcoxon_p_value": w_p,
+                    "cohens_d": d, "bootstrap_ci": ci,
+                    "significant_at_0.05": min(t_p, w_p) < 0.05,
+                })
+        comp_stat_tests[metric] = tests
+    
+    # Error analysis
+    log(f"\n{'='*70}")
+    log("Error Analysis")
+    log(f"{'='*70}")
+    
+    vsr_results = comp_results.get("vsr_pathrag", [])
+    if vsr_results:
+        sorted_vsr = sorted(vsr_results, key=lambda r: r["metrics"]["f1"])
+        log("\nWorst 5 VSR-PathRAG cases:")
+        for r in sorted_vsr[:5]:
+            q = r.get("question", r.get("question_id", ""))
+            log(f"  F1={r['metrics']['f1']:.3f} Q: {q[:80]}")
+            log(f"    Gold: {r.get('gold_answer', '')[:80]}")
+            log(f"    Pred: {r['prediction'][:80]}")
+        
+        log("\nBest 5 VSR-PathRAG cases:")
+        for r in sorted_vsr[-5:]:
+            q = r.get("question", r.get("question_id", ""))
+            log(f"  F1={r['metrics']['f1']:.3f} Q: {q[:80]}")
+    
+    log(f"\nError rates by method:")
+    for m, results in comp_results.items():
+        errors = sum(1 for r in results if "error" in r)
+        log(f"  {m}: {errors}/{len(results)} errors ({errors/len(results)*100:.1f}%)")
+    
+    # Save final comprehensive report
+    final_report = {
+        "experiment": "VSR-PathRAG SCI-tier experiments",
+        "dataset": "ultradomain",
+        "sample_size": len(questions),
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "comparison": {
+            "aggregated": comp_agg,
+            "statistical_tests": comp_stat_tests,
+        },
+        "ablation": {
+            "aggregated": all_aggregated,
+            "statistical_tests": stat_tests,
+        },
+    }
+    
+    final_file = ROOT_DIR / "results" / "enhanced" / "SCI_tier_final_report.json"
+    with open(final_file, 'w', encoding='utf-8') as f:
+        json.dump(final_report, f, ensure_ascii=False, indent=2, default=str)
+    log(f"\nFinal report saved to: {final_file}")
+    
+    # Print comparison table
+    log(f"\n{'='*70}")
+    log(f"COMPARISON Results (UltraDomain, n={len(questions)})")
+    log(f"{'='*70}")
+    log(f"{'Method':<20} {'F1':>8} {'ROUGE-L':>8} {'EM':>6} {'Faith':>8} {'Repair%':>8} {'Time':>8}")
+    log(f"{'-'*70}")
+    for method_name, agg in comp_agg.items():
+        log(f"{method_name:<20} {agg['mean_f1']:8.3f} {agg['mean_rouge_l']:8.3f} "
+              f"{agg['mean_em']:6.1%} {agg['mean_faithfulness']:8.3f} "
+              f"{agg['repair_rate']:7.1%} {agg['mean_runtime_seconds']:7.1f}s")
+    
+    log(f"\n{'='*70}")
+    log("ALL EXPERIMENTS COMPLETE!")
+    log(f"{'='*70}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

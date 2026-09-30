@@ -2,6 +2,58 @@
 
 This PathRAG Demo App is a comprehensive knowledge graph-based Retrieval-Augmented Generation (RAG) system that combines document processing, chat functionality, and knowledge graph visualization in a single application.
 
+## 项目概览
+
+PathRAG 是一个面向知识密集型问答的图增强 RAG 系统。项目将文档解析、实体与关系抽取、图路径检索、文本检索和大语言模型生成整合到一个可运行的 Web 应用中，并在生成后增加证据验证、受控修复、上下文救援和拒答控制，用于降低多跳问答中的证据缺口与幻觉风险。
+
+### 主要功能
+
+- **图文混合检索**：同时利用知识图谱路径、实体邻域和文本片段，支持多跳关系查询。
+- **证据可审计**：将问题义务、答案陈述和证据单元组织为证据契约，记录支持、未知、矛盾和必要性关系。
+- **选择性干预**：根据验证结果在 `preserve`、`repair`、`rescue` 和 `abstain` 之间路由，避免对所有问题无条件增加上下文和模型调用。
+- **Web 应用**：FastAPI 后端 + React 前端，提供文档上传、对话、知识图谱浏览、证据链查看和实验性智能代理页面。
+- **实验与论文材料**：包含严格消融、跨数据集验证、锁定留出集比较、成本分析和失败模式审计，论文草稿与可编辑图稿位于 `paper/`。
+
+### 文档导航
+
+- [系统流程](#how-pathrag-works)与[项目结构](#project-structure)：了解应用的主要模块。
+- [中文论文草稿](paper/PATHRAG_PAPER_DRAFT_ZH.md)与[图稿](paper/PAPER_FIGURES.md)：方法设计、实验结果和可编辑图稿。
+- [实验脚本](experiments/README.md)与[结果索引](results/README.md)：实验组织与复核入口。
+- [论文结果汇总](results/paper_tables/PAPER_READY_EXPERIMENT_TABLES.md)：主要实验表格及数据边界。
+
+### 当前实验摘要
+
+在 UltraDomain Mix130 严格消融中，`full_v2_rescue` 的 F1 为 **0.2878**、忠实度为 **0.9756**，相对 `w/o_repair` 的 F1 增量为 **+0.0671**。在 326 条来源不重叠的锁定留出样本上，冻结的 SAGE v33-preservation 候选 F1 为 **0.3164**，Naive RAG 和 HyDE 均为 **0.2972**。这些结果用于说明当前实验协议下的机制收益和冻结候选表现，不应表述为所有数据集、所有基线上的普遍最优。
+
+### 快速运行
+
+```bash
+# 后端（Windows）
+start-api.bat
+
+# 新开终端启动前端
+cd ui
+npm install
+npm start
+```
+
+默认地址：前端 `http://localhost:3000`，后端 API 文档 `http://localhost:8000/docs`。运行前请复制 `sample.env` 为 `.env`，填入自己的模型服务配置；不要提交包含密钥的 `.env`。
+
+### 数据与配置
+
+原始数据集、实验缓存、日志、SQLite 数据库和模型产物不随代码提交。需要复现实验时，请根据 `experiments/` 和 `results/` 中的说明准备数据；模型服务参数参见 `sample.env`。
+
+## Project map
+
+- Core application: `PathRAG/`, `api/`, `models/`, `main.py`, `app.py`
+- Experiment runners and analysis: [`experiments/README.md`](experiments/README.md)
+- Frozen experiment evidence: [`results/README.md`](results/README.md)
+- Paper writing materials: [`paper/README.md`](paper/README.md)
+- Historical research notes: [`docs/research_notes/README.md`](docs/research_notes/README.md)
+- Diagnostics and manual checks: `tools/diagnostics/`, `tests/manual/`
+
+For paper writing, start from `results/paper_tables/PAPER_READY_EXPERIMENT_TABLES.md`, then use `paper/vsr_pathrag.tex` for the manuscript.
+
 ## What is PathRAG?
 
 PathRAG (Path-based Retrieval Augmented Generation) is an advanced approach to knowledge retrieval and generation that combines the power of knowledge graphs with large language models (LLMs).

@@ -37,6 +37,7 @@ from api.features.users.routes import router as users_router
 from api.features.chats.routes import router as chats_router
 from api.features.documents.routes import router as documents_router
 from api.features.knowledge_graph.routes import router as knowledge_graph_router
+from api.features.innovation.routes import router as innovation_router
 
 # Create default users
 def create_default_users():
@@ -126,6 +127,7 @@ app.include_router(users_router)
 app.include_router(chats_router)
 app.include_router(documents_router)
 app.include_router(knowledge_graph_router)
+app.include_router(innovation_router)
 
 @app.get("/")
 async def root():
