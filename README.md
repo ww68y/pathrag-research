@@ -37,13 +37,13 @@ python -m venv .venv
 # macOS/Linux
 source .venv/bin/activate
 # Windows PowerShell
-.venv\Scripts\Activate.ps1
+& .venv/Scripts/Activate.ps1
 
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Copy `sample.env` to `.env`. Set a unique `SECRET_KEY` and the model/embedding API settings required by your provider. Keep `.env` private; it is excluded from Git.
+Copy `sample.env` to `.env` (`Copy-Item sample.env .env` in PowerShell, or `cp sample.env .env` on macOS/Linux). Set a unique `SECRET_KEY` and the model/embedding API settings required by your provider. Keep `.env` private; it is excluded from Git.
 
 Start the API from the repository root:
 
